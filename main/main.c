@@ -25,18 +25,18 @@
 #define PWM_TIMER       LEDC_TIMER_0
 
 #define MAX_SPEED       255
-#define DRIVE_SPEED     200  // ~80% speed for basic movements
+#define TURN_SPEED      160
+#define DRIVE_SPEED     220  // ~80% speed for basic movements
 #define ESP_WIFI_SSID   "ESP32_RC_CAR"
 #define ESP_WIFI_PASS  "pass1234"
 #define MAX_STA_CONN   4
 
 // Motor A (Left)
-#define MOTOR_A_IN1 GPIO_NUM_25
-#define MOTOR_A_IN2 GPIO_NUM_26
-
+#define MOTOR_A_IN1 GPIO_NUM_26
+#define MOTOR_A_IN2 GPIO_NUM_25
+#define MOTOR_B_IN1 GPIO_NUM_33
+#define MOTOR_B_IN2 GPIO_NUM_32
 // Motor B (Right)
-#define MOTOR_B_IN1 GPIO_NUM_32
-#define MOTOR_B_IN2 GPIO_NUM_33
 
 static const char *TAG = "MAIN";
 /* Symbols created by the linker for the embedded file */
@@ -83,31 +83,31 @@ void stop_motors() {
 }
 
 void move_forward() {
-    set_pin_pwm(LEDC_CHANNEL_0, DRIVE_SPEED); // Motor A Forward
-    set_pin_pwm(LEDC_CHANNEL_1, 0);
+    set_pin_pwm(LEDC_CHANNEL_0, 0);
+    set_pin_pwm(LEDC_CHANNEL_1, DRIVE_SPEED); // Motor A Forward
     set_pin_pwm(LEDC_CHANNEL_2, DRIVE_SPEED); // Motor B Forward
     set_pin_pwm(LEDC_CHANNEL_3, 0);
 }
 
 void move_backward() {
-    set_pin_pwm(LEDC_CHANNEL_0, 0);
-    set_pin_pwm(LEDC_CHANNEL_1, DRIVE_SPEED); // Motor A Reverse
+    set_pin_pwm(LEDC_CHANNEL_0, DRIVE_SPEED); // Motor A Reverse
+    set_pin_pwm(LEDC_CHANNEL_1, 0);
     set_pin_pwm(LEDC_CHANNEL_2, 0);
     set_pin_pwm(LEDC_CHANNEL_3, DRIVE_SPEED); // Motor B Reverse
 }
 
 void turn_left() {
-    set_pin_pwm(LEDC_CHANNEL_0, 0);
-    set_pin_pwm(LEDC_CHANNEL_1, DRIVE_SPEED); // Motor A Reverse
-    set_pin_pwm(LEDC_CHANNEL_2, DRIVE_SPEED); // Motor B Forward
+    set_pin_pwm(LEDC_CHANNEL_0, TURN_SPEED); // Motor A Reverse
+    set_pin_pwm(LEDC_CHANNEL_1, 0);
+    set_pin_pwm(LEDC_CHANNEL_2, TURN_SPEED); // Motor B Forward
     set_pin_pwm(LEDC_CHANNEL_3, 0);
 }
 
 void turn_right() {
-    set_pin_pwm(LEDC_CHANNEL_0, DRIVE_SPEED); // Motor A Forward
-    set_pin_pwm(LEDC_CHANNEL_1, 0);
+    set_pin_pwm(LEDC_CHANNEL_0, 0);
+    set_pin_pwm(LEDC_CHANNEL_1, TURN_SPEED); // Motor A Forward
     set_pin_pwm(LEDC_CHANNEL_2, 0);
-    set_pin_pwm(LEDC_CHANNEL_3, DRIVE_SPEED); // Motor B Reverse
+    set_pin_pwm(LEDC_CHANNEL_3, TURN_SPEED); // Motor B Reverse
 }
 
 static esp_err_t index_get_handler(httpd_req_t *req) {
@@ -257,6 +257,9 @@ httpd_handle_t start_webserver(void) {
 }
 
 void app_main(void) {
+  // initialize nvs for wifi drivers to work
+  // apparently wifi driver uses it in the background
+  // that's why it's the first thing we initialize
   esp_err_t ret = nvs_flash_init();
   if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
     ESP_ERROR_CHECK(nvs_flash_erase());
