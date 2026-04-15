@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 RC Car</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="./output.css">
+</head>
+<body>
+    <h1>ESP32 Control</h1>
+    <div class="flex flex-col items-center justify-center gap-8">
+      <div class="flex flex-col gap-8">
+        <button class="rounded-md p-4 shadow-md" onmousedown="send('F')" onmouseup="send('S')">FORWARD</button><br>
+        <div class="flex flex-row gap-8">
+          <button class="rounded-md p-4 shadow-md" onmousedown="send('L')" onmouseup="send('S')">LEFT</button>
+          <button class="rounded-md p-4 shadow-md" onmousedown="send('R')" onmouseup="send('S')">RIGHT</button><br>
+        </div>
+        <button class="rounded-md p-4 shadow-md" onmousedown="send('B')" onmouseup="send('S')">BACK</button>
+      </div>
+    </div>
+
+    <script>
+        // Connect to the WebSocket using the ESP32's IP
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket = new WebSocket(gateway);
+
+        function send(cmd) {
+            if (websocket.readyState === WebSocket.OPEN) {
+                websocket.send(cmd);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "scripts":{
+    "tw": "bunx tailwindcss -i ./main/input.css -o ./main/output.css --minify --watch",
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "tailwindcss": "3"
+  }
+}

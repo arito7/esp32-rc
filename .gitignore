@@ -1,0 +1,6 @@
+node_modules/
+build/
+managed_components/
+sdkconfig*
+!sdkconfig
+pytest_hello_world.py
