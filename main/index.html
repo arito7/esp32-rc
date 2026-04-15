@@ -9,12 +9,12 @@
     <h1>ESP32 Control</h1>
     <div class="flex flex-col items-center justify-center gap-8">
       <div class="flex flex-col gap-8">
-        <button class="rounded-md p-4 shadow-md" onmousedown="send('F')" onmouseup="send('S')">FORWARD</button><br>
+        <button class="rounded-md p-4 shadow-md bg-purple-400 w-16" onmousedown="send('F')" onmouseup="send('S')">FORWARD</button><br>
         <div class="flex flex-row gap-8">
-          <button class="rounded-md p-4 shadow-md" onmousedown="send('L')" onmouseup="send('S')">LEFT</button>
-          <button class="rounded-md p-4 shadow-md" onmousedown="send('R')" onmouseup="send('S')">RIGHT</button><br>
+          <button class="rounded-md p-4 shadow-md bg-purple-400 w-16" onmousedown="send('L')" onmouseup="send('S')">LEFT</button>
+          <button class="rounded-md p-4 shadow-md bg-purple-400 w-16" onmousedown="send('R')" onmouseup="send('S')">RIGHT</button><br>
         </div>
-        <button class="rounded-md p-4 shadow-md" onmousedown="send('B')" onmouseup="send('S')">BACK</button>
+        <button class="rounded-md p-4 shadow-md bg-purple-400 w-16" onmousedown="send('B')" onmouseup="send('S')">BACK</button>
       </div>
     </div>
 
@@ -22,6 +22,26 @@
         // Connect to the WebSocket using the ESP32's IP
         var gateway = `ws://${window.location.hostname}/ws`;
         var websocket = new WebSocket(gateway);
+
+        document.addEventListener('keydown', (e)=>{
+          switch (e.key) {
+            case "ArrowLeft":
+              send('L');
+              break;
+            case "ArrowRight": 
+              send('R');
+              break;
+            case "ArrowDown":
+              send('F');
+              break;
+            case "ArrowUp":
+              send('B')
+              break;
+          }
+        })
+        document.addEventListener('keyup', (e)=>{
+          send('S')
+        })
 
         function send(cmd) {
             if (websocket.readyState === WebSocket.OPEN) {

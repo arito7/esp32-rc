@@ -15,10 +15,28 @@
 #include "esp_http_server.h"
 #include "esp_event.h" // required for wifi event loops
 #include "esp_wifi.h" // wifi driver
+#include "driver/ledc.h"
+#include "driver/gpio.h"
 
+// PWM Configuration
+#define PWM_FREQ        5000 // 5 kHz is great for DC motors
+#define PWM_RES         LEDC_TIMER_8_BIT
+#define PWM_SPEED_MODE  LEDC_LOW_SPEED_MODE
+#define PWM_TIMER       LEDC_TIMER_0
+
+#define MAX_SPEED       255
+#define DRIVE_SPEED     200  // ~80% speed for basic movements
 #define ESP_WIFI_SSID   "ESP32_RC_CAR"
 #define ESP_WIFI_PASS  "pass1234"
 #define MAX_STA_CONN   4
+
+// Motor A (Left)
+#define MOTOR_A_IN1 GPIO_NUM_25
+#define MOTOR_A_IN2 GPIO_NUM_26
+
+// Motor B (Right)
+#define MOTOR_B_IN1 GPIO_NUM_32
+#define MOTOR_B_IN2 GPIO_NUM_33
 
 static const char *TAG = "MAIN";
 /* Symbols created by the linker for the embedded file */
@@ -27,6 +45,70 @@ extern const uint8_t index_html_end[]   asm("_binary_index_html_end");
 
 extern const uint8_t style_css_start[] asm("_binary_output_css_start");
 extern const uint8_t style_css_end[]   asm("_binary_output_css_end");
+
+void init_pwm_motors(void) {
+    // 1. Configure the Timer
+    ledc_timer_config_t timer_conf = {
+        .speed_mode       = PWM_SPEED_MODE,
+        .timer_num        = PWM_TIMER,
+        .duty_resolution  = PWM_RES,
+        .freq_hz          = PWM_FREQ,
+        .clk_cfg          = LEDC_AUTO_CLK
+    };
+    ESP_ERROR_CHECK(ledc_timer_config(&timer_conf));
+
+    // 2. Configure the 4 Channels (one for each motor pin)
+    ledc_channel_config_t ledc_channel[4] = {
+        { .channel = LEDC_CHANNEL_0, .gpio_num = MOTOR_A_IN1, .speed_mode = PWM_SPEED_MODE, .timer_sel = PWM_TIMER, .duty = 0 },
+        { .channel = LEDC_CHANNEL_1, .gpio_num = MOTOR_A_IN2, .speed_mode = PWM_SPEED_MODE, .timer_sel = PWM_TIMER, .duty = 0 },
+        { .channel = LEDC_CHANNEL_2, .gpio_num = MOTOR_B_IN1, .speed_mode = PWM_SPEED_MODE, .timer_sel = PWM_TIMER, .duty = 0 },
+        { .channel = LEDC_CHANNEL_3, .gpio_num = MOTOR_B_IN2, .speed_mode = PWM_SPEED_MODE, .timer_sel = PWM_TIMER, .duty = 0 }
+    };
+
+    for (int i = 0; i < 4; i++) {
+        ESP_ERROR_CHECK(ledc_channel_config(&ledc_channel[i]));
+    }
+}
+// Helper function to easily apply speed to a specific channel
+void set_pin_pwm(ledc_channel_t channel, uint32_t duty) {
+    ledc_set_duty(PWM_SPEED_MODE, channel, duty);
+    ledc_update_duty(PWM_SPEED_MODE, channel);
+}
+
+void stop_motors() {
+    set_pin_pwm(LEDC_CHANNEL_0, 0);
+    set_pin_pwm(LEDC_CHANNEL_1, 0);
+    set_pin_pwm(LEDC_CHANNEL_2, 0);
+    set_pin_pwm(LEDC_CHANNEL_3, 0);
+}
+
+void move_forward() {
+    set_pin_pwm(LEDC_CHANNEL_0, DRIVE_SPEED); // Motor A Forward
+    set_pin_pwm(LEDC_CHANNEL_1, 0);
+    set_pin_pwm(LEDC_CHANNEL_2, DRIVE_SPEED); // Motor B Forward
+    set_pin_pwm(LEDC_CHANNEL_3, 0);
+}
+
+void move_backward() {
+    set_pin_pwm(LEDC_CHANNEL_0, 0);
+    set_pin_pwm(LEDC_CHANNEL_1, DRIVE_SPEED); // Motor A Reverse
+    set_pin_pwm(LEDC_CHANNEL_2, 0);
+    set_pin_pwm(LEDC_CHANNEL_3, DRIVE_SPEED); // Motor B Reverse
+}
+
+void turn_left() {
+    set_pin_pwm(LEDC_CHANNEL_0, 0);
+    set_pin_pwm(LEDC_CHANNEL_1, DRIVE_SPEED); // Motor A Reverse
+    set_pin_pwm(LEDC_CHANNEL_2, DRIVE_SPEED); // Motor B Forward
+    set_pin_pwm(LEDC_CHANNEL_3, 0);
+}
+
+void turn_right() {
+    set_pin_pwm(LEDC_CHANNEL_0, DRIVE_SPEED); // Motor A Forward
+    set_pin_pwm(LEDC_CHANNEL_1, 0);
+    set_pin_pwm(LEDC_CHANNEL_2, 0);
+    set_pin_pwm(LEDC_CHANNEL_3, DRIVE_SPEED); // Motor B Reverse
+}
 
 static esp_err_t index_get_handler(httpd_req_t *req) {
     // Calculate the size of the file
@@ -126,10 +208,17 @@ static esp_err_t websocket_handler(httpd_req_t *req) {
         
         // This is where the magic happens!
         ESP_LOGI(TAG, "Received packet: %s", ws_pkt.payload);
+
+        char cmd = ((char*)ws_pkt.payload)[0];
         
-        /* TODO: Add your logic here! 
-           if(strcmp((char*)buf, "F") == 0) move_forward();
-        */
+        switch(cmd) {
+            case 'F': move_forward(); break;
+            case 'B': move_backward(); break;
+            case 'L': turn_left(); break;
+            case 'R': turn_right(); break;
+            case 'S': stop_motors(); break;
+            default:  stop_motors(); break;
+        }
     }
     
     free(buf);
@@ -168,16 +257,18 @@ httpd_handle_t start_webserver(void) {
 }
 
 void app_main(void) {
-    // Initialize NVS
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-      ESP_ERROR_CHECK(nvs_flash_erase());
-      ret = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(ret);
+  esp_err_t ret = nvs_flash_init();
+  if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_ERROR_CHECK(nvs_flash_erase());
+    ret = nvs_flash_init();
+  }
+  ESP_ERROR_CHECK(ret);
 
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_AP Initializing...");
-    wifi_init_softap();
+  ESP_LOGI(TAG, "ESP_WIFI_MODE_AP Initializing...");
+  wifi_init_softap();
 
-    start_webserver();
+  ESP_LOGI(TAG, "Initializing Motors...");
+  init_pwm_motors();
+
+  start_webserver();
 }
